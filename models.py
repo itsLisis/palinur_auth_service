@@ -4,7 +4,6 @@ from db import Base
 
 class User(Base):
     __tablename__ = "users"
-    __table_args__ = {"schema": "auth_service"}
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, nullable=False, index=True)

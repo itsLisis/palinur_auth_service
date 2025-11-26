@@ -6,11 +6,4 @@ import models, schemas
 
 # imports for security and hashing passwords
 
-router = APIRouter(prefix="/users", tags=["Users"])
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+#router = APIRouter(prefix="/users", tags=["Users"])

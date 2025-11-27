@@ -5,6 +5,7 @@ from db import get_db
 import models, schemas
 
 from security.hashing import Hash
+from security import jwt_handler
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -14,7 +15,7 @@ def register_user(
     db: Session = Depends(get_db)
 ):
 
-    # 1. Verify if email is already registered
+    # Verify if email is already registered
     user_exists = db.query(models.User).filter(models.User.email == user_data.email).first()
     if user_exists:
         raise HTTPException(
@@ -22,10 +23,10 @@ def register_user(
             detail="Email already registered"
         )
 
-    # 2. Hash password
+    # Hash password
     hashed_pw = Hash.hash_password(user_data.password)
 
-    # 3. Create new user
+    # Create new user
     new_user = models.User(
         email=user_data.email,
         birthday=user_data.birthday,
@@ -43,3 +44,33 @@ def register_user(
 
     # returning user (id, completed_profile, email, birthday )
     return new_user
+
+@router.post("/login", response_model=schemas.TokenResponde)
+def login_user(
+    user_login_data: schemas.UserLogin,
+    db: Session = Depends(get_db)
+):
+    
+    # Verify if email exists
+    user = db.query(models.User).filter(models.User.email == user_login_data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This Email is not registered"
+        )
+    
+    # Verify password
+    valid_password = Hash.verify_password(
+        user_login_data.password,
+        user.hashed_password
+    )
+    if not valid_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or password"
+        )
+    
+    #  If everything is correct -> generate JWT
+    token = jwt_handler.create_access_token({"user_id": user.id})
+
+    return {"access_token": token, "token_type": "bearer"}

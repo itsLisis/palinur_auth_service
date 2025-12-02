@@ -9,7 +9,7 @@ from security import jwt_handler
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-@router.post("/register", response_model=schemas.UserResponse)
+@router.post("/register", response_model=schemas.TokenResponde)
 def register_user(
     user_data: schemas.UserCreate,
     db: Session = Depends(get_db)
@@ -29,7 +29,6 @@ def register_user(
     # Create new user
     new_user = models.User(
         email=user_data.email,
-        birthday=user_data.birthday,
         hashed_password=hashed_pw,
         completed_profile=False
     )
@@ -39,11 +38,19 @@ def register_user(
     db.commit()
     db.refresh(new_user)
 
-    # Optional: generate JTW token
-    # token = create_access_token({"user_id": new_user.id})
+    # Generate JWT token for automatic login after registration
+    token = jwt_handler.create_access_token({
+        "user_id": new_user.id,
+        "complete_profile": False
+    })
 
-    # returning user (id, completed_profile, email, birthday )
-    return new_user
+    # Return token and user info (profile is always incomplete after registration)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "complete_profile": False,
+        "user_id": new_user.id
+    }
 
 @router.post("/login", response_model=schemas.TokenResponde)
 def login_user(
@@ -71,6 +78,44 @@ def login_user(
         )
     
     #  If everything is correct -> generate JWT
-    token = jwt_handler.create_access_token({"user_id": user.id})
+    token = jwt_handler.create_access_token({
+        "user_id": user.id,
+        "complete_profile": user.completed_profile
+    })
 
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token, 
+        "token_type": "bearer",
+        "complete_profile": user.completed_profile,
+        "user_id": user.id
+    }
+
+@router.patch("/users/{user_id}/complete_profile", response_model=schemas.TokenResponde)
+def mark_profile_complete(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Actualizar el estado del perfil
+    user.completed_profile = True
+    db.commit()
+    db.refresh(user)
+    
+    token = jwt_handler.create_access_token({
+        "user_id": user.id,
+        "complete_profile": True
+    })
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "complete_profile": True,
+        "user_id": user.id
+    }

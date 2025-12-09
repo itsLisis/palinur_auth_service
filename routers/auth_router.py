@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from security.turnstile import verify_turnstile
 from sqlalchemy.orm import Session
 
 from db import get_db
@@ -12,8 +13,16 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.post("/register", response_model=schemas.TokenResponde)
 def register_user(
     user_data: schemas.UserCreate,
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    # Verify turnstile
+    client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+    if not verify_turnstile(user_data.turnstile_token, client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Captcha verification failed"
+        )
 
     # Verify if email is already registered
     user_exists = db.query(models.User).filter(models.User.email == user_data.email).first()
@@ -55,9 +64,26 @@ def register_user(
 @router.post("/login", response_model=schemas.TokenResponde)
 def login_user(
     user_login_data: schemas.UserLogin,
+    request: Request,
     db: Session = Depends(get_db)
-):
+):  
+    # Debug logging
+    print(f"Login attempt - Email: {user_login_data.email}")
+    print(f"Turnstile token received: {user_login_data.turnstile_token[:50]}...")
     
+    # Verify turnstile first
+    client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+    print(f"Client IP: {client_ip}")
+    
+    turnstile_result = verify_turnstile(user_login_data.turnstile_token, client_ip)
+    print(f"Turnstile verification result: {turnstile_result}")
+    
+    if not turnstile_result:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Captcha verification failed"
+        )
+         
     # Verify if email exists
     user = db.query(models.User).filter(models.User.email == user_login_data.email).first()
     if not user:

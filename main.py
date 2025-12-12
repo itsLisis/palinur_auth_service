@@ -3,7 +3,6 @@ from db import Base, engine
 from routers import auth_router, users_router
 
 app = FastAPI(title="Auth Service")
-# app = FastAPI(docs_url=None, redoc_url=None)
 
 Base.metadata.create_all(bind=engine)
 
